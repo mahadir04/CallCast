@@ -11,8 +11,17 @@ import { playDTMFSequence, encodeReportToDTMF, encodeReportToHexDTMF } from './u
 import { startListening, stopListening, parseDTMFBurst, parseHexDTMFBurst } from './utils/dtmf-decoder';
 import { connectComms, disconnectComms, joinAsOperator, sendChatMessage, sendSectorAlert, requestPresence } from './utils/comms-client';
 
+const getBackendUrl = () => {
+  const configuredUrl = import.meta.env.VITE_BACKEND_URL?.trim();
+  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
 
-const BACKEND_URL = `http://${window.location.hostname}:5000`;
+  const host = window.location.hostname;
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+
+  return isLocalhost ? 'http://127.0.0.1:5000' : window.location.origin;
+};
+
+const BACKEND_URL = getBackendUrl();
 
 // Geocoding Coordinates for Bangladesh postcodes/regions
 const AREA_COORDS = {

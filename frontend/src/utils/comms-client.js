@@ -40,11 +40,13 @@ export function connectComms(serverUrl) {
   if (socket && socket.connected) return socket;
 
   const operatorId = getOrCreateOperatorId();
+  const normalizedUrl = serverUrl?.replace(/\/$/, '');
 
-  socket = io(serverUrl, {
+  socket = io(normalizedUrl, {
     transports: ['websocket', 'polling'],
     reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
+    withCredentials: false,
     // Send persistent operatorId as auth on every connection/reconnect
     auth: { operatorId },
   });
