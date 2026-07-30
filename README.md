@@ -112,18 +112,5 @@ CallCast/
 
 ---
 
-## Cloud Deployment (Render / Docker)
-
-1. Push to GitHub (already configured).
-2. Go to [render.com](https://render.com) → New Web Service → Connect repo.
-3. Render detects the `Dockerfile` automatically. Click **Deploy**.
-
-Or with Docker on a Linux VPS:
-```bash
-docker compose up --build -d
-```
-
----
-
 ## License
 MIT — Built for emergency field operations.
