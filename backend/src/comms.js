@@ -19,7 +19,14 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 
-/** Tracks connected operators:  socketId → { name, sector, joinedAt } */
+/**
+ * Tracks connected operators by their PERSISTENT operatorId.
+ * Format:  operatorId → { name, sector, joinedAt, socketId }
+ *
+ * Using operatorId (stored in browser localStorage) as the key means the
+ * same human is always one entry, even if they refresh the page and get a
+ * new ephemeral socket.id.
+ */
 const operators = new Map();
 
 let io = null;
@@ -39,47 +46,62 @@ export function initCommsServer(httpServer) {
   });
 
   io.on('connection', (socket) => {
-    console.log(`[COMMS] Operator connected → ${socket.id}`);
+    // Read the stable, localStorage-backed operatorId sent by the client.
+    // Falls back to socket.id for legacy / anonymous connections.
+    const operatorId = socket.handshake.auth?.operatorId || socket.id;
+    console.log(`[COMMS] Operator connected → socket=${socket.id}  operatorId=${operatorId}`);
 
     // ── 1. OPERATOR REGISTRATION ───────────────────────────────────────────
     socket.on('operator:join', ({ name = 'Anonymous', sector = 'All' } = {}) => {
-      operators.set(socket.id, { name, sector, joinedAt: Date.now() });
+      // If this operator was already in the Map (reconnect), preserve joinedAt
+      const existing = operators.get(operatorId);
+      operators.set(operatorId, {
+        name,
+        sector,
+        socketId: socket.id,          // current ephemeral socket (updated on reconnect)
+        joinedAt: existing?.joinedAt ?? Date.now(),  // keep original join time
+      });
+
       socket.join(`sector:${sector}`);    // Sector-specific room
       socket.join('operators');           // Global operator room
 
-      // Confirm to the joining operator
+      // Confirm to the joining operator – include their stable operatorId
       socket.emit('operator:joined', {
+        operatorId,
         socketId: socket.id,
         name,
         sector,
         message: `Welcome to CallCast Comms, ${name}. Sector: ${sector}.`,
+        reconnected: !!existing,
       });
 
       // Broadcast updated presence list to everyone
       broadcastPresence();
 
-      console.log(`[COMMS] ${name} joined sector "${sector}"`);
+      console.log(`[COMMS] ${name} joined sector "${sector}" (id=${operatorId}${ existing ? ' RECONNECTED' : '' })`);
     });
 
     // ── 2. OPERATOR CHAT ───────────────────────────────────────────────────
     // Operators can broadcast short text messages to the comms channel.
     socket.on('chat:send', ({ message }) => {
       if (!message || message.length > 500) return;
-      const op = operators.get(socket.id) || { name: 'Unknown' };
+      const op = operators.get(operatorId) || { name: 'Unknown' };
       const payload = {
+        operatorId,
         from:   op.name,
         sector: op.sector,
         message: message.trim(),
         ts:     Date.now(),
       };
       io.to('operators').emit('chat:message', payload);
-      console.log(`[CHAT] ${op.name}: ${message.trim().substring(0, 60)}`);
+      console.log(`[CHAT] ${op.name} (${operatorId}): ${message.trim().substring(0, 60)}`);
     });
 
     // ── 3. SECTOR ALERT (operator-initiated broadcast) ─────────────────────
     socket.on('alert:sector', ({ sector, message }) => {
-      const op = operators.get(socket.id) || { name: 'Dispatcher' };
+      const op = operators.get(operatorId) || { name: 'Dispatcher' };
       const payload = {
+        operatorId,
         from:    op.name,
         sector,
         message,
@@ -88,7 +110,7 @@ export function initCommsServer(httpServer) {
       };
       io.to(`sector:${sector}`).emit('alert:incoming', payload);
       io.to('operators').emit('alert:incoming', payload);  // Also all operators
-      console.log(`[ALERT] ${op.name} → Sector ${sector}: ${message.substring(0, 60)}`);
+      console.log(`[ALERT] ${op.name} (${operatorId}) → Sector ${sector}: ${message.substring(0, 60)}`);
     });
 
     // ── 4. P2P WEBRTC SIGNALING ────────────────────────────────────────────
@@ -113,12 +135,15 @@ export function initCommsServer(httpServer) {
 
     // ── 5. DISCONNECT ──────────────────────────────────────────────────────
     socket.on('disconnect', (reason) => {
-      const op = operators.get(socket.id);
-      operators.delete(socket.id);
-      if (op) {
-        console.log(`[COMMS] ${op.name} disconnected (${reason})`);
+      const op = operators.get(operatorId);
+      // Only remove from the Map if this socket is still the current one.
+      // A reconnect will have already updated the Map with the new socketId,
+      // so we must not delete it when the OLD socket finally fires disconnect.
+      if (op && op.socketId === socket.id) {
+        operators.delete(operatorId);
+        console.log(`[COMMS] ${op.name} (${operatorId}) disconnected (${reason})`);
+        broadcastPresence();
       }
-      broadcastPresence();
     });
   });
 
@@ -166,8 +191,14 @@ export function getIO() {
 // ──────────────────────────────────────────────────────────────────────────────
 function buildPresenceList() {
   const list = [];
-  for (const [id, op] of operators) {
-    list.push({ socketId: id, name: op.name, sector: op.sector, joinedAt: op.joinedAt });
+  for (const [operatorId, op] of operators) {
+    list.push({
+      operatorId,              // stable, persistent identity
+      socketId:  op.socketId, // current ephemeral socket
+      name:      op.name,
+      sector:    op.sector,
+      joinedAt:  op.joinedAt,
+    });
   }
   return list;
 }

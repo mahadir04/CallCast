@@ -14,6 +14,24 @@ import { io } from 'socket.io-client';
 let socket = null;
 
 /**
+ * Returns (or generates) a stable operator ID stored in localStorage.
+ * This ensures the same browser session always uses the same identity,
+ * even across page refreshes and socket reconnections.
+ */
+function getOrCreateOperatorId() {
+  const key = 'callcast_operator_id';
+  let id = localStorage.getItem(key);
+  if (!id) {
+    // Generate a simple UUID v4
+    id = 'op-' + ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
+/**
  * Connect to the CallCast comms server.
  * @param {string} serverUrl  e.g.  http://192.168.0.191:5000
  * @returns {object} socket instance
@@ -21,10 +39,14 @@ let socket = null;
 export function connectComms(serverUrl) {
   if (socket && socket.connected) return socket;
 
+  const operatorId = getOrCreateOperatorId();
+
   socket = io(serverUrl, {
     transports: ['websocket', 'polling'],
     reconnectionAttempts: Infinity,
     reconnectionDelay: 2000,
+    // Send persistent operatorId as auth on every connection/reconnect
+    auth: { operatorId },
   });
 
   return socket;
