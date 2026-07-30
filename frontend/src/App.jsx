@@ -12,6 +12,9 @@ import { startListening, stopListening, parseDTMFBurst, parseHexDTMFBurst } from
 import { connectComms, disconnectComms, joinAsOperator, sendChatMessage, sendSectorAlert, requestPresence } from './utils/comms-client';
 
 const getBackendUrl = () => {
+  const customUrl = localStorage.getItem('callcast_backend_url')?.trim();
+  if (customUrl) return customUrl.replace(/\/$/, '');
+
   const configuredUrl = import.meta.env.VITE_BACKEND_URL?.trim();
   if (configuredUrl) return configuredUrl.replace(/\/$/, '');
 
@@ -21,7 +24,7 @@ const getBackendUrl = () => {
   return isLocalhost ? 'http://127.0.0.1:5000' : window.location.origin;
 };
 
-const BACKEND_URL = getBackendUrl();
+let BACKEND_URL = getBackendUrl();
 
 // Geocoding Coordinates for Bangladesh postcodes/regions
 const AREA_COORDS = {
@@ -64,6 +67,8 @@ const createMarkerIcon = (type) => {
 };
 
 function App() {
+  const [backendUrlState, setBackendUrlState] = useState(BACKEND_URL);
+  const [customBackendInput, setCustomBackendInput] = useState(BACKEND_URL);
   const [currentTab, setCurrentTab] = useState('dashboard'); // sidebar tabs: 'dashboard', 'medical', 'missing', 'shelter', 'roster', 'logs', 'transceiver', 'settings'
   const [reports, setReports] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -173,9 +178,15 @@ function App() {
     }
   };
 
+  // Fetch data when backend URL changes
+  useEffect(() => {
+    fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backendUrlState]);
+
   // ── SOCKET.IO COMMS CONNECTION ────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = connectComms(BACKEND_URL);
+    const socket = connectComms(backendUrlState);
 
     socket.on('connect', () => {
       console.log('[COMMS] Connected to communication server');
@@ -243,7 +254,7 @@ function App() {
 
     return () => { disconnectComms(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [backendUrlState]);
 
   // Flush Sync Cache function
   const handleFlushCache = async () => {
@@ -265,6 +276,22 @@ function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSaveBackendUrl = () => {
+    let cleanUrl = customBackendInput.trim().replace(/\/$/, '');
+    if (!cleanUrl) {
+      alert('Please enter a valid URL.');
+      return;
+    }
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      alert('Backend URL must start with http:// or https://');
+      return;
+    }
+    localStorage.setItem('callcast_backend_url', cleanUrl);
+    BACKEND_URL = cleanUrl;
+    setBackendUrlState(cleanUrl);
+    alert(`Backend URL updated and saved! Reconnecting...`);
   };
 
   // Comms: Join the operator network
@@ -1643,14 +1670,37 @@ function App() {
             
             <div className="tactical-panel" style={{ padding: '16px' }}>
               <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: '#fff', margin: '0 0 16px 0' }}>Server Connection</h3>
-              <div className="form-group" style={{ gap: '12px' }}>
-                <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
                   <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Backend URL</label>
-                  <input type="text" className="form-input" style={{ width: '95%', marginTop: '4px' }} defaultValue={BACKEND_URL} disabled />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      style={{ flex: 1 }} 
+                      placeholder="e.g. https://callcast-backend.onrender.com"
+                      value={customBackendInput}
+                      onChange={(e) => setCustomBackendInput(e.target.value)}
+                    />
+                    <button 
+                      className="btn-red" 
+                      style={{ padding: '8px 16px' }}
+                      onClick={handleSaveBackendUrl}
+                    >
+                      Save & Reconnect
+                    </button>
+                  </div>
+                  <p style={{ fontSize: '10px', color: 'var(--text-secondary)', margin: '6px 0 0 0' }}>
+                    Currently using: <strong style={{ color: 'var(--accent-green)' }}>{backendUrlState}</strong>
+                  </p>
                 </div>
-                <div>
+                
+                <div className="form-group">
                   <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Twilio Webhook Target</label>
-                  <input type="text" className="form-input" style={{ width: '95%', marginTop: '4px' }} defaultValue={`${BACKEND_URL}/voice`} disabled />
+                  <input type="text" className="form-input" style={{ width: '100%', marginTop: '4px' }} value={`${backendUrlState}/voice`} disabled />
+                  <p style={{ fontSize: '10px', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                    Configure this URL inside the Twilio Console as the incoming voice webhook.
+                  </p>
                 </div>
               </div>
             </div>
