@@ -1,9 +1,28 @@
+# Dependencies
 node_modules/
-.DS_Store
+offline-server/
+
+# Build output
 dist/
 build/
+
+# Environment secrets
 *.env
 .env
+.env.*
+
+# SQLite database (runtime data - never commit)
 backend/callcast.db
-frontend/dist/
-offline-server/node_modules/
+*.db
+*.sqlite
+
+# PM2 logs (runtime generated)
+logs/
+*.log
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini

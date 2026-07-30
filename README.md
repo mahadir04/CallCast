@@ -1,112 +1,129 @@
-# CallCast
-**Turning ordinary phone calls into an emergency data channel when the internet is down.**
+# CallCast 📡
 
-Built for: Crisis Tech track — dedicated to the spirit of Jogajog and the July Revolution internet shutdowns.
+**Emergency Dispatch & Field Communication System**
 
----
-
-## 1. The Problem
-
-When internet and SMS go dark during a crisis (protest, disaster, deliberate shutdown), most "offline-first" hackathon projects assume people have smartphones with Bluetooth/Wi-Fi Direct/mesh capability. In reality:
-
-- The people most affected often have basic feature phones, not smartphones.
-- Telcos frequently keep **voice calling alive** even when they throttle or kill data and SMS — for regulatory/emergency reasons.
-- Nobody is building for that gap: **voice-only, zero-app, zero-data communication.**
-
-CallCast exploits the one channel that survives: **the phone call itself.**
+A real-time crisis management Progressive Web App (PWA) designed for off-grid field operations — works entirely over a local network or Windows Mobile Hotspot with zero internet dependency.
 
 ---
 
-## 2. The Idea, in One Sentence
-
-Anyone — even with a $10 button phone — can dial a number and press keys (DTMF tones) to report their status, location, or a missing person, and that data appears live on a shelter/safety dashboard. No app, no data plan, no SMS required.
-
----
-
-## 3. What It Actually Does
-
-### Core system
-1. **IVR hotline.** Person dials a local number.
-2. **Voice menu** (in local language) offers options via key press:
-   - `1` — "I am safe" + record/select location
-   - `2` — "I need help" + category (medical / trapped / flood / shelter)
-   - `3` — "Report a missing person"
-   - `4` — "Report a hazard"
-3. **Backend decodes DTMF + call metadata** into structured records.
-4. **Live dashboard (PWA)** shows a map + list: safety check-ins, shelter capacity, missing-person registry, hazard reports.
-
-### New Features added during implementation:
-- **Progressive Web App (PWA):** The frontend is a fully installable mobile app. With its Service Worker (`sw.js`), the app interface works completely offline.
-- **Operator Comms Chat:** A real-time chat interface powered by Socket.IO allows operators to coordinate in real time while viewing live system alerts directly in the chat panel.
-- **Windows Production Deployer:** A 1-click `run-production.bat` script builds the React assets and serves them via the Node.js backend on a single port (5000), making deployment extremely simple.
-- **Off-Grid "Mobile Hotspot" Mode:** Operates entirely without a Wi-Fi router. The server machine broadcasts a Windows Mobile Hotspot, allowing operators to connect their phones directly to the server's local IP via Wi-Fi for completely decentralized field operations.
-
----
-
-## 4. Why This Is Different From Typical Crisis-Tech Projects
-
-| Typical approach | CallCast |
-|---|---|
-| Requires a smartphone + app install | Works on any phone that can dial and press keys |
-| Requires Bluetooth/Wi-Fi range (~30–100m) | Works over normal cellular voice, any distance |
-| Assumes data or SMS survives | Assumes only voice calling survives |
-| Serves smartphone-owning population | Serves the population *least* likely to have a smartphone |
-
----
-
-## 5. Architecture
+## Architecture
 
 ```
-Caller's Phone (any phone, any network)
-        │  (voice call, DTMF tones)
-        ▼
-Telephony Gateway (Twilio / Asterisk)
-        │  (decoded DTMF + call metadata)
-        ▼
-Backend API (Node.js + Express, single process serving frontend)
-        │
-        ├──► Socket.IO (Real-time Operator Comms)
-        │
-        ▼
-Database (SQLite)
-        │
-        ▼
-Dashboard (React PWA, Offline-capable, Mobile Responsive)
+Caller (any phone) → Twilio IVR → Backend API (Node.js/Express)
+                                          │
+                              ┌───────────┴────────────┐
+                         Socket.IO               SQLite DB
+                         (live push)           (reports, logs)
+                              │
+                    React PWA Dashboard
+                  (map, registry, chat, DTMF)
+```
+
+## Features
+
+| Feature | Description |
+|---|---|
+| 📞 **IVR Hotline** | Twilio webhook — callers press 1-5 to report status |
+| 🗺️ **Live Map** | Leaflet map with real-time incident pins |
+| 💬 **Operator Chat** | Socket.IO real-time dispatcher chat |
+| 📻 **DTMF Transceiver** | Encode/decode emergency reports as audio tones |
+| 🧑‍🤝‍🧑 **Missing Registry** | Voice log registry with printable export |
+| 🖨️ **Print Fallback Cards** | Pocket cards for civilians — press 1=Safe, 2=Help, 3=Missing |
+| 📱 **PWA** | Installable on mobile, works offline after first load |
+| 🔁 **Always-On** | PM2 process manager with Windows Startup auto-recovery |
+
+---
+
+## Quick Start (Windows)
+
+### 1. Run Production Server
+```bat
+.\run-production.bat
+```
+This builds the React frontend, installs backend deps, and launches via PM2.
+
+### 2. Access the Dashboard
+```
+http://localhost:5000
+```
+
+### 3. Share on Local Network / Hotspot
+```
+http://<your-ip>:5000
+```
+Find your IP with: `ipconfig` (look for `IPv4 Address`)
+
+---
+
+## Off-Grid / Hotspot Mode
+
+1. Open **Windows Settings → Mobile Hotspot** and turn it ON.
+2. Run `.\run-production.bat`
+3. Connect phones/tablets to your hotspot Wi-Fi.
+4. Open `http://<hotspot-ip>:5000` on any connected device.
+
+No internet required. The PWA caches all UI assets on first load.
+
+---
+
+## PM2 Commands
+
+```powershell
+pm2 status              # Check if CallCast is running
+pm2 logs callcast       # Live server logs
+pm2 restart callcast    # Restart (after code changes)
+pm2 stop callcast       # Stop the server
+pm2 start ecosystem.config.cjs  # Start fresh
+```
+
+## Windows Auto-Start on Login
+```powershell
+# Already configured via Startup folder:
+# C:\Users\<you>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\CallCast-PM2.bat
 ```
 
 ---
 
-## 6. Tech Stack
+## Project Structure
 
-| Layer | Tool |
-|---|---|
-| Telephony / IVR | **Twilio Programmable Voice** |
-| Backend API | **Node.js + Express** (Serves API and static frontend assets) |
-| Database | **SQLite** (Fast setup, portable) |
-| Dashboard frontend | **React + Vite** (PWA, Leaflet map, Mobile-first CSS) |
-| Real-time Comms | **Socket.IO** (Instant operator chat and alerts) |
-
----
-
-## 7. How to Run
-
-### Development Mode
-1. Start the backend: `cd backend && npm run dev` (Runs on port 5000)
-2. Start the frontend: `cd frontend && npm run dev` (Runs on port 5173)
-
-### Production / Off-Grid Deployment (Windows)
-1. Double click `run-production.bat` in the root folder.
-2. This script compiles the frontend and runs the backend on port `5000`.
-3. To access from other devices on the network, run `ipconfig` to find your IPv4 address (e.g. `192.168.0.x`) and navigate to `http://192.168.0.x:5000` on your mobile phone or tablet.
-
-### Off-Grid Field Setup (No Wi-Fi Router)
-1. Turn on "Mobile Hotspot" in Windows Settings on the server PC.
-2. Connect operator phones to the PC's hotspot.
-3. Run `run-production.bat`.
-4. Open the PC's hotspot IP address on the phones to use the system offline.
+```
+CallCast/
+├── backend/
+│   └── src/
+│       ├── app.js          # Express server + Twilio IVR + REST API
+│       ├── comms.js        # Socket.IO real-time layer
+│       └── db.js           # SQLite database + seeding
+├── frontend/
+│   ├── public/
+│   │   ├── sw.js           # Service Worker (PWA offline caching)
+│   │   └── manifest.webmanifest
+│   └── src/
+│       ├── App.jsx         # Main React application
+│       ├── index.css       # Tactical dark-mode UI
+│       └── utils/
+│           ├── comms-client.js   # Socket.IO client wrapper
+│           ├── dtmf-encoder.js   # DTMF tone generation
+│           └── dtmf-decoder.js   # DTMF mic decoding
+├── ecosystem.config.cjs    # PM2 always-on config
+├── Dockerfile              # Docker build (for cloud deploy)
+├── docker-compose.yml      # Docker Compose (for server deploy)
+└── run-production.bat      # One-click Windows deployer
+```
 
 ---
 
-## 8. Credits / Inspiration
+## Cloud Deployment (Render / Docker)
 
-Dedicated to the spirit of **Jogajog**, which kept people connected during the internet shutdowns of the July Revolution — built on the idea that resilience means designing for the channel that's actually still there, not the one we wish were there.
+1. Push to GitHub (already configured).
+2. Go to [render.com](https://render.com) → New Web Service → Connect repo.
+3. Render detects the `Dockerfile` automatically. Click **Deploy**.
+
+Or with Docker on a Linux VPS:
+```bash
+docker compose up --build -d
+```
+
+---
+
+## License
+MIT — Built for emergency field operations.
