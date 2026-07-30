@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+dist/
+build/
+*.env
+.env
+backend/callcast.db
+frontend/dist/
+offline-server/node_modules/
