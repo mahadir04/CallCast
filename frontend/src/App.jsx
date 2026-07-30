@@ -1733,9 +1733,6 @@ function App() {
         </div>
       )}
 
-        </div>
-      )}
-
       {/* ── PRINT-ONLY VIEWS ── */}
       {printMode === 'missing' && (
         <div className="print-only">
