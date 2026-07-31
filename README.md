@@ -109,11 +109,5 @@ CallCast/
 ├── docker-compose.yml      # Docker Compose (for server deploy)
 └── run-production.bat      # One-click Windows deployer
 ```
-<<<<<<< HEAD
-=======
-
->>>>>>> 09d76cb3a4042846e7d4055fcf48fa3a8ec47f96
----
-
 ## License
 MIT — Built for emergency field operations.
